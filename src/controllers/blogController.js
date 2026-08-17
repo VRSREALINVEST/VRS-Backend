@@ -8,9 +8,9 @@ exports.getBlogs = async (req, res) => {
   res.json(blogs);
 };
 
-// GET SINGLE BY SLUG
+// GET SINGLE BY SLUG (public — published only, so drafts stay unindexable)
 exports.getBlogBySlug = async (req, res) => {
-  const blog = await Blog.findOne({ slug: req.params.slug });
+  const blog = await Blog.findOne({ slug: req.params.slug, isPublished: true });
   if (!blog) return res.status(404).json({ message: "Not found" });
   res.json(blog);
 };
