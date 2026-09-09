@@ -3,6 +3,7 @@ const Webinar = require("../models/webinarModel");
 const Team = require("../models/Team");
 const TextTestimonial = require("../models/TextTestimonial");
 const VideoTestimonial = require("../models/VideoTestimonial");
+const Enquiry = require("../models/Enquiry");
 
 exports.getDashboardStats = async (req, res) => {
   try {
@@ -36,7 +37,8 @@ exports.getDashboardStats = async (req, res) => {
       TextTestimonial.countDocuments(),
       VideoTestimonial.countDocuments(),
 
-   
+      // Enquiries
+      Enquiry.countDocuments(),
 
       // Properties added this month
       SecuredProperty.countDocuments({

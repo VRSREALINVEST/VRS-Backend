@@ -62,6 +62,7 @@ const textTestimonialRoutes = require("./routes/textTestimonialRoutes");
 const videoTestimonialRoutes = require("./routes/videoTestimonialRoutes");
 const blogRoutes = require("./routes/blogRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const enquiryRoutes = require("./routes/enquiryRoutes");
 
 const app = express();
 
@@ -84,5 +85,6 @@ app.use("/api/text-testimonials", textTestimonialRoutes);
 app.use("/api/video-testimonials", videoTestimonialRoutes);
 app.use("/api/blog", blogRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/enquiries", enquiryRoutes);
 
 module.exports = app;
