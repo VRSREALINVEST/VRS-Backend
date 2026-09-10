@@ -1,6 +1,15 @@
 const Enquiry = require("../models/Enquiry");
 const { STATUSES } = require("../models/Enquiry");
 const { emitNewEnquiry } = require("../config/socket");
+const {
+  APP_TIMEZONE,
+  statBoundaries,
+  parseDateRange,
+} = require("../utils/dateRange");
+
+// A visitor-supplied search term goes into a RegExp, so metacharacters must be
+// neutralised or a crafted term could hang the query.
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Mongoose validation errors carry per-field messages that are safe to show a
 // visitor; anything else is an internal fault and must not leak outwards.
@@ -65,11 +74,85 @@ exports.createEnquiry = async (req, res) => {
  */
 exports.getEnquiries = async (req, res) => {
   try {
-    // ponytail: returns the full list, filtered in the admin UI. Move search
-    // and status filtering here with pagination once this passes a few
-    // thousand enquiries.
-    const enquiries = await Enquiry.find().sort({ createdAt: -1 });
+    const filter = {};
+
+    // Search across the three fields the admin list shows.
+    const search = clean(req.query.search);
+    if (search) {
+      const term = new RegExp(escapeRegex(search), "i");
+      filter.$or = [{ name: term }, { email: term }, { phone: term }];
+    }
+
+    // Date range on the submission date, resolved in the business timezone.
+    const range = parseDateRange(req.query.from, req.query.to);
+    if (range.invalid) {
+      return res
+        .status(400)
+        .json({ message: "From date cannot be after To date" });
+    }
+
+    if (range.gte || range.lt) {
+      filter.createdAt = {};
+      if (range.gte) filter.createdAt.$gte = range.gte;
+      if (range.lt) filter.createdAt.$lt = range.lt;
+    }
+
+    const enquiries = await Enquiry.find(filter).sort({ createdAt: -1 });
     res.json(enquiries);
+  } catch (error) {
+    handleError(res, error);
+  }
+};
+
+/**
+ * @route   GET /api/enquiries/stats
+ * @access  Admin
+ *
+ * Deliberately unaffected by the list's search/date filters: these cards
+ * describe the whole database, not the current view.
+ *
+ * One $facet pass so the four counts share a single trip to MongoDB, and each
+ * branch is a bounded createdAt range served by the createdAt index rather
+ * than four separate collection scans.
+ */
+exports.getEnquiryStats = async (req, res) => {
+  try {
+    const { todayStart, tomorrowStart, last7Start, lastMonthStart, thisMonthStart } =
+      statBoundaries();
+
+    const [result] = await Enquiry.aggregate([
+      {
+        $facet: {
+          today: [
+            { $match: { createdAt: { $gte: todayStart, $lt: tomorrowStart } } },
+            { $count: "n" },
+          ],
+          last7Days: [
+            { $match: { createdAt: { $gte: last7Start, $lt: tomorrowStart } } },
+            { $count: "n" },
+          ],
+          lastMonth: [
+            {
+              $match: {
+                createdAt: { $gte: lastMonthStart, $lt: thisMonthStart },
+              },
+            },
+            { $count: "n" },
+          ],
+          total: [{ $count: "n" }],
+        },
+      },
+    ]);
+
+    const count = (branch) => (branch && branch[0] ? branch[0].n : 0);
+
+    res.json({
+      today: count(result.today),
+      last7Days: count(result.last7Days),
+      lastMonth: count(result.lastMonth),
+      total: count(result.total),
+      timezone: APP_TIMEZONE,
+    });
   } catch (error) {
     handleError(res, error);
   }

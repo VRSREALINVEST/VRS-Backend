@@ -99,6 +99,10 @@ const enquirySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// The admin list sorts by newest and filters by submission date, and the
+// statistics run four bounded createdAt ranges, so this index serves both.
+enquirySchema.index({ createdAt: -1 });
+
 const Enquiry = mongoose.model("Enquiry", enquirySchema);
 
 module.exports = Enquiry;

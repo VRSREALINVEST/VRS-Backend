@@ -7,6 +7,8 @@ const authMiddleware = require("../middleware/authMiddleware");
 router.post("/", controller.createEnquiry);
 
 // Admin only — visitors must never read or modify enquiries.
+// "/stats" is declared before "/:id" so it is not matched as an enquiry id.
+router.get("/stats", authMiddleware, controller.getEnquiryStats);
 router.get("/", authMiddleware, controller.getEnquiries);
 router.get("/:id", authMiddleware, controller.getEnquiryById);
 router.put("/:id/status", authMiddleware, controller.updateEnquiryStatus);
