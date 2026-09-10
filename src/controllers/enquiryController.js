@@ -83,6 +83,16 @@ exports.getEnquiries = async (req, res) => {
       filter.$or = [{ name: term }, { email: term }, { phone: term }];
     }
 
+    // Status filter: only "New", "Contacted", "Closed" are valid.
+    const statusFilter = clean(req.query.status);
+    if (statusFilter) {
+      if (STATUSES.includes(statusFilter)) {
+        filter.status = statusFilter;
+      }
+      // Silently ignore invalid status values rather than constructing
+      // an arbitrary query.
+    }
+
     // Date range on the submission date, resolved in the business timezone.
     const range = parseDateRange(req.query.from, req.query.to);
     if (range.invalid) {
