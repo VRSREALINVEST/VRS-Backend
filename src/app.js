@@ -17,6 +17,7 @@ const app = express();
 
 const corsConfig = {
   origin: [
+    "https://admin.vrsrealinvest.com.au",
     "https://vrs-admin.vercel.app",
     "https://www.vrsrealinvest.com.au",
     "https://vrsrealinvest.com.au",
