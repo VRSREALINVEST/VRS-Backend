@@ -20,6 +20,8 @@ const corsConfig = {
     "https://vrs-admin.vercel.app",
     "https://www.vrsrealinvest.com.au",
     "https://vrsrealinvest.com.au",
+    "http://localhost:3001",
+    "http://localhost:3000",
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -28,3 +30,17 @@ const corsConfig = {
 app.use(cors(corsConfig));
 
 app.use(express.json());
+
+app.use("/api/auth", authRoutes);
+app.use("/api/hero", heroRoutes);
+app.use("/api/secured-properties", securedPropertyRoutes);
+app.use("/api/webinars", webinarRoutes);
+app.use("/api/discover-video", discoverVideoRoutes);
+app.use("/api/team", teamRoutes);
+app.use("/api/text-testimonials", textTestimonialRoutes);
+app.use("/api/video-testimonials", videoTestimonialRoutes);
+app.use("/api/blog", blogRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/enquiries", enquiryRoutes);
+
+module.exports = app;
