@@ -1,10 +1,20 @@
 const SecuredProperty = require("../models/SecuredProperty");
 const cloudinary = require("../config/cloudinary");
+const { pick, invalidTextFields, sendError } = require("../utils/validation");
+
+// The only fields a request may set; the images come from the uploads.
+const FIELDS = ["title", "description", "securedPrice", "marketPrice", "currentPrice"];
 
 exports.createProperty = async (req, res) => {
   try {
-    const { title, description, securedPrice, marketPrice, currentPrice } =
-      req.body;
+    // Everything is validated before uploading, so a rejected request never
+    // leaves orphaned images in Cloudinary.
+    const missing = invalidTextFields(req.body, FIELDS);
+    if (missing.length) {
+      return res
+        .status(400)
+        .json({ message: `Required: ${missing.join(", ")}` });
+    }
 
     if (!req.files?.coverImage || !req.files?.galleryImages) {
       return res
@@ -42,18 +52,14 @@ exports.createProperty = async (req, res) => {
     const galleryImages = await Promise.all(galleryUploadPromises);
 
     const property = await SecuredProperty.create({
-      title,
-      description,
+      ...pick(req.body, FIELDS),
       coverImage: coverUpload,
       galleryImages,
-      securedPrice,
-      marketPrice,
-      currentPrice,
     });
 
     res.status(201).json(property);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 
@@ -65,23 +71,26 @@ exports.getAllProperties = async (req, res) => {
     });
     res.json(properties);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 
 // UPDATE
 exports.updateProperty = async (req, res) => {
   try {
-    const { title, description, securedPrice, marketPrice, currentPrice } =
-      req.body;
+    const updateData = pick(req.body, FIELDS);
 
-    let updateData = {
-      title,
-      description,
-      securedPrice,
-      marketPrice,
-      currentPrice,
-    };
+    const blank = invalidTextFields(updateData, FIELDS, { partial: true });
+    if (blank.length) {
+      return res
+        .status(400)
+        .json({ message: `Cannot be empty: ${blank.join(", ")}` });
+    }
+
+    // 404 before uploading anything for a property that doesn't exist.
+    if (!(await SecuredProperty.exists({ _id: req.params.id }))) {
+      return res.status(404).json({ message: "Property not found" });
+    }
 
     // If new cover image uploaded
     if (req.files?.coverImage) {
@@ -121,21 +130,30 @@ exports.updateProperty = async (req, res) => {
     const property = await SecuredProperty.findByIdAndUpdate(
       req.params.id,
       updateData,
-      { new: true },
+      { new: true, runValidators: true },
     );
+
+    if (!property) {
+      return res.status(404).json({ message: "Property not found" });
+    }
 
     res.json(property);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 
 exports.deleteProperty = async (req, res) => {
   try {
-    await SecuredProperty.findByIdAndDelete(req.params.id);
+    const property = await SecuredProperty.findByIdAndDelete(req.params.id);
+
+    if (!property) {
+      return res.status(404).json({ message: "Property not found" });
+    }
+
     res.json({ message: "Property deleted successfully" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 

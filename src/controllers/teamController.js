@@ -1,5 +1,9 @@
 const TeamMember = require("../models/Team");
 const cloudinary = require("../config/cloudinary");
+const { pick, invalidTextFields, sendError } = require("../utils/validation");
+
+// The only fields a request may set; the image comes from the upload.
+const FIELDS = ["name", "role"];
 
 // GET ALL
 exports.getTeam = async (req, res) => {
@@ -7,7 +11,7 @@ exports.getTeam = async (req, res) => {
     const members = await TeamMember.find().sort({ createdAt: -1 });
     res.json(members);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 
@@ -16,7 +20,13 @@ exports.getTeam = async (req, res) => {
 // CREATE
 exports.createMember = async (req, res) => {
   try {
-    const { name, role } = req.body;
+    // Validated before uploading, so a rejected request leaves no orphan image.
+    const missing = invalidTextFields(req.body, FIELDS);
+    if (missing.length) {
+      return res
+        .status(400)
+        .json({ message: `Required: ${missing.join(", ")}` });
+    }
 
     if (!req.file) {
       return res.status(400).json({ message: "Image required" });
@@ -34,23 +44,32 @@ exports.createMember = async (req, res) => {
     });
 
     const member = await TeamMember.create({
-      name,
-      role,
+      ...pick(req.body, FIELDS),
       image: result.secure_url,
     });
 
     res.status(201).json(member);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 
 // UPDATE
 exports.updateMember = async (req, res) => {
   try {
-    const { name, role } = req.body;
+    const updateData = pick(req.body, FIELDS);
 
-    let updateData = { name, role };
+    const blank = invalidTextFields(updateData, FIELDS, { partial: true });
+    if (blank.length) {
+      return res
+        .status(400)
+        .json({ message: `Cannot be empty: ${blank.join(", ")}` });
+    }
+
+    // 404 before uploading anything for a member that doesn't exist.
+    if (!(await TeamMember.exists({ _id: req.params.id }))) {
+      return res.status(404).json({ message: "Team member not found" });
+    }
 
     if (req.file) {
       const result = await new Promise((resolve, reject) => {
@@ -70,21 +89,30 @@ exports.updateMember = async (req, res) => {
     const member = await TeamMember.findByIdAndUpdate(
       req.params.id,
       updateData,
-      { new: true }
+      { new: true, runValidators: true }
     );
+
+    if (!member) {
+      return res.status(404).json({ message: "Team member not found" });
+    }
 
     res.json(member);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 
 // DELETE
 exports.deleteMember = async (req, res) => {
   try {
-    await TeamMember.findByIdAndDelete(req.params.id);
+    const member = await TeamMember.findByIdAndDelete(req.params.id);
+
+    if (!member) {
+      return res.status(404).json({ message: "Team member not found" });
+    }
+
     res.json({ message: "Deleted successfully" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };

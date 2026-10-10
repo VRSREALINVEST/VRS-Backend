@@ -1,40 +1,46 @@
 const Webinar = require("../models/webinarModel");
+const {
+  pick,
+  invalidTextFields,
+  normalizeUrl,
+  sendError,
+} = require("../utils/validation");
 
- 
+// The only fields a request may set; formats are validated by the schema.
+const FIELDS = [
+  "title",
+  "description",
+  "day",
+  "time",
+  "australiaTimeZone",
+  "meetLink",
+  "recordingLink",
+  "durationMinutes",
+];
+const REQUIRED = ["title", "day", "time", "australiaTimeZone", "meetLink"];
+
+const withNormalizedLinks = (data) => {
+  for (const key of ["meetLink", "recordingLink"]) {
+    if (data[key] !== undefined) data[key] = normalizeUrl(data[key]);
+  }
+  return data;
+};
 
 exports.createWebinar = async (req, res) => {
   try {
-    const {
-      title,
-      description,
-      day,
-      time,
-      australiaTimeZone,
-      meetLink,
-      recordingLink,
-      durationMinutes,
-    } = req.body;
-
-    if (!title || !day || !time || !australiaTimeZone || !meetLink) {
+    if (invalidTextFields(req.body, REQUIRED).length) {
       return res.status(400).json({
         message: "Required fields missing",
       });
     }
 
-    const webinar = await Webinar.create({
-      title,
-      description,
-      day,
-      time,
-      australiaTimeZone,
-      meetLink,
-      recordingLink,
-      durationMinutes,
-    });
+    const webinar = await Webinar.create(
+      withNormalizedLinks(pick(req.body, FIELDS))
+    );
 
     res.status(201).json(webinar);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 
@@ -53,7 +59,7 @@ exports.getWebinars = async (req, res) => {
 
     res.json(webinars);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 /* ========================= */
@@ -61,15 +67,32 @@ exports.getWebinars = async (req, res) => {
 /* ========================= */
 exports.updateWebinar = async (req, res) => {
   try {
+    // Only known fields, so an update can't carry $unset or other operators.
+    const update = pick(req.body, FIELDS);
+    if (!Object.keys(update).length) {
+      return res.status(400).json({ message: "No valid fields to update" });
+    }
+
+    const blank = invalidTextFields(update, REQUIRED, { partial: true });
+    if (blank.length) {
+      return res
+        .status(400)
+        .json({ message: `Cannot be empty: ${blank.join(", ")}` });
+    }
+
     const webinar = await Webinar.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { new: true }
+      withNormalizedLinks(update),
+      { new: true, runValidators: true }
     );
+
+    if (!webinar) {
+      return res.status(404).json({ message: "Webinar not found" });
+    }
 
     res.json(webinar);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 
@@ -78,9 +101,14 @@ exports.updateWebinar = async (req, res) => {
 /* ========================= */
 exports.deleteWebinar = async (req, res) => {
   try {
-    await Webinar.findByIdAndDelete(req.params.id);
+    const webinar = await Webinar.findByIdAndDelete(req.params.id);
+
+    if (!webinar) {
+      return res.status(404).json({ message: "Webinar not found" });
+    }
+
     res.json({ message: "Webinar deleted" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };

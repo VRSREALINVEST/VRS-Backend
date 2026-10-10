@@ -32,6 +32,12 @@ exports.updateHero = async (req, res) => {
       return res.status(400).json({ message: "Type required" });
     }
 
+    // Anything else previously fell through both branches below and the
+    // request hung without a response.
+    if (type !== "image" && type !== "video") {
+      return res.status(400).json({ message: "Type must be image or video" });
+    }
+
     let hero = await Hero.findOne();
 
     if (!hero) {

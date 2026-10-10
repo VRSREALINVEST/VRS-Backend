@@ -17,3 +17,6 @@ logs
 # OS files
 .DS_Store
 Thumbs.db
+
+# scratch captures (a captured HTTP response with session cookies was once committed)
+*.tmp

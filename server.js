@@ -1,4 +1,13 @@
 require("dotenv").config();
+
+// Admin tokens are HS256-signed with this secret: a short one lets anyone
+// holding a single token brute-force it offline and forge new tokens.
+if ((process.env.JWT_SECRET || "").length < 32) {
+  console.warn(
+    "[security] JWT_SECRET is shorter than 32 characters; rotate it to a long random value."
+  );
+}
+
 const http = require("http");
 const app = require("./src/app");
 const connectDB = require("./src/config/db");

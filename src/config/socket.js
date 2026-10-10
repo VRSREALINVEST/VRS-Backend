@@ -42,7 +42,13 @@ const initSocket = (httpServer) => {
     if (!token) return next(new Error("Unauthorized"));
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+        algorithms: ["HS256"],
+      });
+      // Same admin roles as requireAdmin on the REST routes.
+      if (!["admin", "superadmin"].includes(decoded.role)) {
+        return next(new Error("Unauthorized"));
+      }
       socket.admin = { id: decoded.id, role: decoded.role };
       next();
     } catch (error) {

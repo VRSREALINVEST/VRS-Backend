@@ -4,6 +4,7 @@ const Team = require("../models/Team");
 const TextTestimonial = require("../models/TextTestimonial");
 const VideoTestimonial = require("../models/VideoTestimonial");
 const Enquiry = require("../models/Enquiry");
+const { sendError } = require("../utils/validation");
 
 exports.getDashboardStats = async (req, res) => {
   try {
@@ -84,6 +85,6 @@ exports.getDashboardStats = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };

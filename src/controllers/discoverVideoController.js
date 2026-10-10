@@ -1,5 +1,6 @@
 const DiscoverVideo = require("../models/discoverVideo");
 const cloudinary = require("../config/cloudinary");
+const { isHttpUrl, normalizeUrl, sendError } = require("../utils/validation");
 
 // GET
 exports.getVideo = async (req, res) => {
@@ -7,17 +8,24 @@ exports.getVideo = async (req, res) => {
     const video = await DiscoverVideo.findOne();
     res.json(video || null);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error);
   }
 };
 
 // UPDATE / CREATE
 exports.updateVideo = async (req, res) => {
   try {
-    const { videoUrl } = req.body;
-
-    if (!videoUrl) {
+    if (!req.body.videoUrl) {
       return res.status(400).json({ message: "Video URL required" });
+    }
+
+    // Checked before the thumbnail upload, so a bad link never leaves an
+    // orphaned image behind.
+    const videoUrl = normalizeUrl(req.body.videoUrl);
+    if (!isHttpUrl(videoUrl)) {
+      return res
+        .status(400)
+        .json({ message: "Video URL must be an http(s) link" });
     }
 
     let uploadedThumbnail = null;
@@ -34,10 +42,9 @@ exports.updateVideo = async (req, res) => {
         stream.end(req.file.buffer);
       });
 
-      uploadedThumbnail = {
-        url: result.secure_url,
-        public_id: result.public_id,
-      };
+      // The schema and the admin page both treat thumbnail as the image URL
+      // (storing an {url, public_id} object here made every save fail).
+      uploadedThumbnail = result.secure_url;
     }
 
     let video = await DiscoverVideo.findOne();
@@ -48,11 +55,8 @@ exports.updateVideo = async (req, res) => {
         videoUrl,
       });
     } else {
-      // delete old thumbnail
-      if (uploadedThumbnail && video.thumbnail?.public_id) {
-        await cloudinary.uploader.destroy(video.thumbnail.public_id);
-      }
-
+      // The previous thumbnail stays in Cloudinary, as before: only a URL is
+      // stored, and the old object branch that destroyed it never matched.
       video.videoUrl = videoUrl;
 
       if (uploadedThumbnail) {
@@ -64,6 +68,6 @@ exports.updateVideo = async (req, res) => {
 
     res.json(video);
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    sendError(res, error);
   }
 };

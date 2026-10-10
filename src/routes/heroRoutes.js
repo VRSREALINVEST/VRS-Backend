@@ -2,13 +2,14 @@ const express = require("express");
 const router = express.Router();
 const heroController = require("../controllers/heroController");
 const upload = require("../middleware/upload");
-const authMiddleware = require("../middleware/authMiddleware");
+const requireAdmin = require("../middleware/requireAdmin");
+const validateObjectId = require("../middleware/validateObjectId");
 
 router.get("/", heroController.getHero);
 
 router.put(
   "/",
-  authMiddleware,
+  requireAdmin,
   upload.fields([
     { name: "images", maxCount: 10 },
     { name: "video", maxCount: 1 },
@@ -18,7 +19,8 @@ router.put(
 
 router.delete(
   "/image/:id",
-  authMiddleware,
+  requireAdmin,
+  validateObjectId,
   heroController.deleteImage
 );
 

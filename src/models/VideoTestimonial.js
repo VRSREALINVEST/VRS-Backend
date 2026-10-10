@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { isHttpUrl } = require("../utils/validation");
 
 const videoTestimonialSchema = new mongoose.Schema(
   {
@@ -13,6 +14,10 @@ const videoTestimonialSchema = new mongoose.Schema(
     youtubeLink: {
       type: String,
       required: true,
+      validate: {
+        validator: isHttpUrl,
+        message: "YouTube link must be an http(s) URL",
+      },
     },
   },
   { timestamps: true }
