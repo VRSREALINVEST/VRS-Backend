@@ -27,6 +27,33 @@ const PROPERTY_GOALS = [
   "I’m not sure yet — I need guidance",
 ];
 
+// "What are you looking to do?" on the /strategy-session form (Page Copy v2).
+// It feeds the same `requirement` field; the first and fourth options already
+// exist in PROPERTY_GOALS.
+const STRATEGY_GOALS = [
+  "Buy my first investment property",
+  "Add to my portfolio",
+  "Buy through my SMSF",
+  "Buy my first home",
+  "Just learning for now",
+];
+
+const STATES = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT", "Overseas"];
+
+// The en dashes are significant, as above.
+const TIMINGS = [
+  "Within 3 months",
+  "3–6 months",
+  "6–12 months",
+  "Just researching",
+];
+
+// Which form sent the enquiry. Enquiries saved before this existed have none.
+const SOURCES = ["strategy-session"];
+
+const UTM_KEYS = ["source", "medium", "campaign", "term", "content"];
+const UTM_MAX_LENGTH = 200;
+
 const PROPERTY_TYPES = [
   "Apartment / Unit",
   "House",
@@ -37,6 +64,21 @@ const PROPERTY_TYPES = [
 ];
 
 const STATUSES = ["New", "Contacted", "Closed"];
+
+// The strategy-session form's extra fields are mandatory only for that form,
+// so the older request shape and existing records stay valid.
+function isStrategySession() {
+  return this.source === "strategy-session";
+}
+
+// Fields only the strategy-session form sends. A request carrying any of them
+// must also name that source; otherwise it would be checked as the older
+// shape and fail on a `name` the form never sends.
+function hasStrategyFields() {
+  return ["firstName", "lastName", "state", "timing", "contactConsent"].some(
+    (field) => this[field] !== undefined
+  );
+}
 
 const enquirySchema = new mongoose.Schema(
   {
@@ -68,7 +110,16 @@ const enquirySchema = new mongoose.Schema(
       type: String,
       required: [true, "Please select what you are enquiring about"],
       enum: {
-        values: [...REQUIREMENTS, ...PROPERTY_GOALS],
+        values: [
+          ...new Set([...REQUIREMENTS, ...PROPERTY_GOALS, ...STRATEGY_GOALS]),
+        ],
+        message: "Invalid enquiry type",
+      },
+      // A strategy-session enquiry may only use that form's own options.
+      validate: {
+        validator(value) {
+          return !isStrategySession.call(this) || STRATEGY_GOALS.includes(value);
+        },
         message: "Invalid enquiry type",
       },
     },
@@ -88,6 +139,67 @@ const enquirySchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: [1000, "Message is too long"],
+    },
+
+    // `name` stays the single display/search field; for a strategy-session
+    // enquiry the controller builds it from these two.
+    firstName: {
+      type: String,
+      trim: true,
+      maxlength: [40, "First name is too long"],
+      required: [isStrategySession, "First name is required"],
+    },
+
+    lastName: {
+      type: String,
+      trim: true,
+      maxlength: [40, "Last name is too long"],
+      required: [isStrategySession, "Last name is required"],
+    },
+
+    state: {
+      type: String,
+      enum: { values: STATES, message: "Invalid state" },
+      required: [isStrategySession, "Please select your state"],
+    },
+
+    timing: {
+      type: String,
+      enum: { values: TIMINGS, message: "Invalid timing" },
+      required: [isStrategySession, "Please select when you are hoping to buy"],
+    },
+
+    // No defaults on the consent fields: an enquiry saved before they existed
+    // keeps neither, so "never asked" stays distinguishable from "declined".
+    // The controller stores real booleans only.
+    contactConsent: {
+      type: Boolean,
+      required: [isStrategySession, "Contact permission is required"],
+      validate: {
+        validator(value) {
+          return !isStrategySession.call(this) || value === true;
+        },
+        message: "Contact permission is required",
+      },
+    },
+
+    marketingConsent: Boolean,
+
+    utm: Object.fromEntries(
+      UTM_KEYS.map((key) => [
+        key,
+        {
+          type: String,
+          trim: true,
+          maxlength: [UTM_MAX_LENGTH, "UTM value is too long"],
+        },
+      ])
+    ),
+
+    source: {
+      type: String,
+      enum: { values: SOURCES, message: "Invalid source" },
+      required: [hasStrategyFields, "Source is required"],
     },
 
     status: {
@@ -110,3 +222,9 @@ module.exports.REQUIREMENTS = REQUIREMENTS;
 module.exports.PROPERTY_GOALS = PROPERTY_GOALS;
 module.exports.PROPERTY_TYPES = PROPERTY_TYPES;
 module.exports.STATUSES = STATUSES;
+module.exports.STRATEGY_GOALS = STRATEGY_GOALS;
+module.exports.STATES = STATES;
+module.exports.TIMINGS = TIMINGS;
+module.exports.SOURCES = SOURCES;
+module.exports.UTM_KEYS = UTM_KEYS;
+module.exports.UTM_MAX_LENGTH = UTM_MAX_LENGTH;

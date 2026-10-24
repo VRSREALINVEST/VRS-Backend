@@ -1,5 +1,5 @@
 const Enquiry = require("../models/Enquiry");
-const { STATUSES } = require("../models/Enquiry");
+const { STATUSES, UTM_KEYS, UTM_MAX_LENGTH } = require("../models/Enquiry");
 const { emitNewEnquiry } = require("../config/socket");
 const {
   APP_TIMEZONE,
@@ -38,21 +38,68 @@ const clean = (value) => {
   return trimmed === "" ? undefined : trimmed;
 };
 
+// Only a JSON true counts as consent ("true", 1 or "on" do not). Undefined when
+// the request never mentioned it, as the older request shape doesn't.
+const consent = (value) => (value === undefined ? undefined : value === true);
+
+// Attribution is best effort: unknown keys and non-strings are dropped and
+// overlong values cut, so a malformed UTM can never block an enquiry.
+const cleanUtm = (utm) => {
+  if (!utm || typeof utm !== "object" || Array.isArray(utm)) return undefined;
+
+  const kept = {};
+  for (const key of UTM_KEYS) {
+    const value = clean(utm[key]);
+    if (value) kept[key] = value.slice(0, UTM_MAX_LENGTH);
+  }
+  return Object.keys(kept).length ? kept : undefined;
+};
+
 /**
  * @route   POST /api/enquiries
- * @access  Public — submitted by the enquiry popup and the Contact page form.
+ * @access  Public — submitted by the /strategy-session form (source
+ *          "strategy-session"). The older request shape without a source is
+ *          still accepted unchanged.
  */
 exports.createEnquiry = async (req, res) => {
   try {
+    // Express 5 leaves req.body undefined when no JSON body was sent.
+    const body = req.body ?? {};
+    // A source that was sent must name a known form exactly. Dropping a
+    // malformed one (an array, an empty string) would quietly check the
+    // request as the older shape instead, so it becomes "" and fails.
+    const source =
+      body.source === undefined ? undefined : (clean(body.source) ?? "");
+    const firstName = clean(body.firstName);
+    const lastName = clean(body.lastName);
+
     // Whitelisted: status, timestamps and _id can never be set by a visitor.
     const enquiry = await Enquiry.create({
-      name: clean(req.body.name),
-      email: clean(req.body.email),
-      phone: clean(req.body.phone),
-      requirement: clean(req.body.requirement),
-      propertyType: clean(req.body.propertyType),
-      preferredLocation: clean(req.body.preferredLocation),
-      message: clean(req.body.message),
+      // The strategy-session form sends first and last name; `name` stays the
+      // single field the admin inbox shows and searches.
+      name:
+        source === "strategy-session"
+          ? [firstName, lastName].filter(Boolean).join(" ") || undefined
+          : clean(body.name),
+      firstName,
+      lastName,
+      email: clean(body.email),
+      phone: clean(body.phone),
+      requirement: clean(body.requirement),
+      propertyType: clean(body.propertyType),
+      preferredLocation: clean(body.preferredLocation),
+      message: clean(body.message),
+      state: clean(body.state),
+      timing: clean(body.timing),
+      contactConsent: consent(body.contactConsent),
+      // The strategy-session form always asks, so an unticked box is a real
+      // "no". The older shape never asked, so it stays unset unless sent.
+      marketingConsent:
+        source === "strategy-session"
+          ? body.marketingConsent === true
+          : consent(body.marketingConsent),
+      utm: cleanUtm(body.utm),
+      source,
     });
 
     // Only now that Mongo has confirmed the write do connected admins hear
@@ -201,7 +248,7 @@ exports.updateEnquiryStatus = async (req, res) => {
     const enquiry = await Enquiry.findByIdAndUpdate(
       req.params.id,
       { status },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!enquiry) {
