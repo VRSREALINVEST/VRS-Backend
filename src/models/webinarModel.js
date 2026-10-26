@@ -10,9 +10,11 @@ const webinarSchema = new mongoose.Schema(
 
   description: String,
 
+  // The schedule is no longer shown on the website (client requirement), so
+  // day, time and time zone are optional. A value that is sent is still
+  // checked, and existing webinars keep theirs.
   day: {
     type: String,
-    required: true,
     enum: [
       "Monday",
       "Tuesday",
@@ -24,17 +26,14 @@ const webinarSchema = new mongoose.Schema(
     ],
   },
 
-  // 24-hour HH:MM (what the admin time input sends); the public page
-  // formats it by splitting on ":".
+  // 24-hour HH:MM (what the admin time input sends).
   time: {
     type: String,
-    required: true,
     match: [/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, "Time must be HH:MM (24-hour)"],
   },
 
   australiaTimeZone: {
     type: String,
-    required: true,
     enum: ["AWST","ACST","ACDT","AEST","AEDT"],
   },
 

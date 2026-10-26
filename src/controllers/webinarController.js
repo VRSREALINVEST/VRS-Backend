@@ -17,7 +17,16 @@ const FIELDS = [
   "recordingLink",
   "durationMinutes",
 ];
-const REQUIRED = ["title", "day", "time", "australiaTimeZone", "meetLink"];
+const REQUIRED = ["title", "meetLink"];
+
+// The schedule is optional now. The admin form sends "" for a field left
+// blank, which would fail the schema's day and time-zone checks, so blanks
+// are dropped: nothing is stored on create, and an update keeps the old value.
+const SCHEDULE = ["day", "time", "australiaTimeZone"];
+const withoutBlankSchedule = (data) => {
+  for (const key of SCHEDULE) if (data[key] === "") delete data[key];
+  return data;
+};
 
 const withNormalizedLinks = (data) => {
   for (const key of ["meetLink", "recordingLink"]) {
@@ -35,7 +44,7 @@ exports.createWebinar = async (req, res) => {
     }
 
     const webinar = await Webinar.create(
-      withNormalizedLinks(pick(req.body, FIELDS))
+      withNormalizedLinks(withoutBlankSchedule(pick(req.body, FIELDS)))
     );
 
     res.status(201).json(webinar);
@@ -68,7 +77,7 @@ exports.getWebinars = async (req, res) => {
 exports.updateWebinar = async (req, res) => {
   try {
     // Only known fields, so an update can't carry $unset or other operators.
-    const update = pick(req.body, FIELDS);
+    const update = withoutBlankSchedule(pick(req.body, FIELDS));
     if (!Object.keys(update).length) {
       return res.status(400).json({ message: "No valid fields to update" });
     }
